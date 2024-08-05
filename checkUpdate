@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+import subprocess
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import ssl
+
+# SMTP server configuration
+smtp_server = "emailserver.com"
+smtp_port = 465
+smtp_user = "username"
+smtp_password = "haha_no"
+
+
+updateInfo  = subprocess.run(['dnf', 'updateinfo', '--info'], capture_output=True, text=True)
+updateInfoOutput = updateInfo.stdout + updateInfo.stderr
+# Run the upgrade and capture the output
+dnf_result = subprocess.run(['dnf', 'upgrade', '--assumeyes'], capture_output=True, text=True)
+dnf_output = dnf_result.stdout + dnf_result.stderr  # Capture both stdout and stderr
+
+# Capture the output and exit status of needs-restarting -r
+needs_restarting_result = subprocess.run(['needs-restarting', '-r'], capture_output=True, text=True)
+needs_restarting_output = needs_restarting_result.stdout
+status = needs_restarting_result.returncode
+
+email_body = f"I attempted to update the system, here's what I got:\n\nInfo:\n{updateInfoOutput}\n\n"
+email_body += f"______________________________________________________________________________\n\nPackages:\n{dnf_output}\n\n"
+
+if status == 1:
+    email_body += "______________________________________________________________________________\n\n"
+    email_body += f"A reboot is required due to recent updates.\n\nDetails:\n{needs_restarting_output}"
+
+msg = MIMEMultipart()
+msg['Subject'] = 'Fedora Update Notification'
+msg['From'] = 'from@emailserver.com'
+msg['To'] = 'username'
+
+body = MIMEText(email_body)
+msg.attach(body)
+
+
+context = ssl.create_default_context()
+with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
+    server.login(smtp_user, smtp_password)
+    server.sendmail('from@emailserver.com', ['username'], msg.as_string())
